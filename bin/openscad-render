@@ -28,23 +28,6 @@ fail() {
     exit 1
 }
 
-get_variable() {
-    variable=$( grep -E '( |^)if' "$file" | grep -E '(.stl|.dxf)' | grep -Po '[^\s^(]*(?=\s*==)' | uniq )
-    [ "$variable" ] || return 1
-    echo "${INFO}Found variable \"$variable\" for defining multiple outputs." 1>&2
-}
-
-process() {
-    local file=$1
-    local output=$2
-    echo "$output"
-    echo "${INFO}Starting $output...$NORMAL" 1>&2
-    image="${output%.*}.png"
-    echo "$image"
-    render "$file" "$output" &
-    render "$file" "$image" &
-}
-
 list_colors() {
     local file=$1
     grep -Po '(?<=color\().*(?=\))' "$file" | sort -u  | grep -v _color
@@ -69,8 +52,9 @@ process_all_comments() {
         else
             output="${file%.*}_$module.$filetype"
         fi
+
         if echo "$filetype" | grep -q "scad"; then
-            echo "${RED}scad is invalid output.  Skipping for safety reasons.$NORMAL"
+            build_scad "$file" "$module" "$output" "$args" &
             continue
         fi
 
@@ -106,6 +90,24 @@ build_color() {
     $blender
 }
 
+build_scad() {
+    file=$1
+    shift
+    module=$1
+    shift
+    output=$1
+    shift
+
+    output_dir=$( dirname "$output" )
+    relative_file=$( realpath -m "$file" --relative-to="$output_dir" )
+
+    # do not overwrite files
+    [ -f "$output" ] && return 0
+    use_module "$relative_file" "$module" "$*" >> "$output"
+    echo "$output ${GREEN}OK$NORMAL"
+    # git add $output
+}
+
 build() {
     file=$1
     shift
@@ -122,20 +124,13 @@ build() {
     # git add $output
 }
 
-process_all() {
-   local file=$1 
-   while read -r output; do
-       process "$file" "$output" &
-    done < <( grep -E '( |^)if' "$file" | grep -E -o '[^"^ ^'\'']*(.stl|.dxf)' )
-}
-
-render() {
+build_global() {
     file=$1
     shift
     output=$1
     shift
-    echo "$openscad" -o "$output" "$file" "${@:-}"
-    if ! time $openscad --viewall --colorscheme=Tomorrow\ Night -o "$output" "$file" ; then
+    # shellcheck disable=SC2068
+    if ! time $openscad --viewall --colorscheme=Tomorrow\ Night -o "$output" "$file"  ${@:-}; then
         echo "$output ${RED}failed$NORMAL"
         return 1
     fi
@@ -143,13 +138,13 @@ render() {
     # git add $output
 }
 
+
 process_one() {
+    # generate a single stl and png
     output=${file//.scad/.stl}
-    echo "${INFO}Starting $output...$NORMAL " 1>&2
     image="${output%.*}.png"
-    echo "${INFO}Starting $image...$NORMAL " 1>&2
-    render "$file" "$out/$output"
-    render "$file" "$out/$image"
+    build_global "$file" "$output"
+    build_global "$file" "$image"
 }
 
 use_module_fifo() {
@@ -157,11 +152,13 @@ use_module_fifo() {
     local module=$2
     use_module "$( readlink -f "$file" )" "$module"
 }
+
 use_module() {
     local file=$1
-    local module=$2
-
-    echo "use <$file>; $module();"
+    shift
+    local module=$1
+    shift
+    echo "use <$file>; $module($*);"
 }
 
 execute() {
@@ -173,14 +170,7 @@ execute() {
     dir=$( dirname "$file" )
     out=$dir/output
     mkdir -p "$out"
-
-    if ! process_all_comments "$file"; then
-        if get_variable; then
-           process_all "$file" 1>&2 
-        else
-           process_one "$file" 1>&2
-        fi
-    fi
+    process_all_comments "$file" || process_one "$file" 
     wait
     # git commit -m "autogen outout"
     echo ""

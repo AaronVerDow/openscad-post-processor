@@ -3,8 +3,16 @@
 This repo includes some scripts for automaically generating output from OpenSCAD.
 
 There are several actions:
-* (Final) Render: generate output files
-* Preview: open files for viewing
+* Preview: Open views of the scad file. 
+* Render: Generate output files.  This can be done automatically by using hooks.
+* Final: Manually generate output files.  This is for rendering output that takes too long to do automatically.
+* Build README: Automatically build a README.md that includes images
+
+Hooks:
+* git commit: automatically add output to an asset branch of your repo
+* maslow community garden: automatically build output for a Maslow community garden compatible repository
+* README builder: Builds a README.md from scad source that includes comments and any generated pictures.
+* vim preview: Automatically open and close the previews of a file.
 
 ## Render
 Declare output by adding comments above modules:
@@ -32,11 +40,19 @@ Rendering is done through an automatically built temporary file which will `use`
 
 Only passing the filetype (no dots) will result in an automatically generated name based on the script name, module name, and filetype.  For example: rendering a png of the assembled module in bankers_shelves.scad will create the file bankers_shelves_assembled.png 
 
+Regardless of where the processing script is called from all paths are relative to the location of the scad file being processed.
+
 A custom filename can be specified instead of the filetype.  `// RENDER output/bankers_shelves.png` will attempt to write to "output/bankers_shelves.png" instead of auto generating a name.  For manually specified names:
 * A dot must be included in the name
 * It must end in a valid filetype for openscad to process it
 * No spaces
 * Asbolute or relative paths can be used
+
+Custom names will be evaluated so variables may be used.  The following variables are supported:
+* filename: name of the openscad file excluding directories
+* basename: name of the openscad file excluding directories and file extension
+* module: name of the module
+* reporoot: relative path to git repository root from openscad file
 
 ### Render SCAD
 
@@ -81,3 +97,24 @@ Supported filetypes are:
 ## Final
 
 Final is the same as render, but it will not be included in any git or vim hooks.  This is where the really heavy work should be done.
+
+# Hooks
+
+## vimrc
+
+Add this to ~/.vimrc for automatic renders and previews:
+
+```
+" Open preview windows on open
+au BufRead *.scad silent exec "!openscad-preview <afile> > /dev/null 2>&1 &"
+
+" Close preview windows when quitting
+au VimLeave *.scad silent exec "!openscad-preview --kill <afile> > /dev/null 2>&1 &"
+
+" Render output on write
+au BufWritePost *.scad silent exec "!openscad-render <afile> > /dev/null 2>&1 &"
+```
+
+## git
+
+todo
