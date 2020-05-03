@@ -1,0 +1,207 @@
+#!/bin/bash
+set -euo pipefail
+
+
+CRE="$(echo -e '\r\033[K')"
+RED="$(echo -e '\033[1;31m')"
+GREEN="$(echo -e '\033[1;32m')"
+YELLOW="$(echo -e '\033[1;33m')"
+BLUE="$(echo -e '\033[1;34m')"
+MAGENTA="$(echo -e '\033[1;35m')"
+CYAN="$(echo -e '\033[1;36m')"
+WHITE="$(echo -e '\033[1;37m')"
+NORMAL="$(echo -e '\033[0;39m')"
+export CRE RED GREEN YELLOW BLUE MAGENTA CYAN WHITE NORMAL
+
+
+current_branch() {
+    git rev-parse --abbrev-ref HEAD
+}
+
+print_load() {
+    echo -n "Load average: " 1>&2
+    cat /proc/loadavg 1>&2
+}
+
+fail() {
+    echo "$RED$*$NORMAL" 1>&2
+    exit 1
+}
+
+get_variable() {
+    variable=$( grep -E '( |^)if' "$file" | grep -E '(.stl|.dxf)' | grep -Po '[^\s^(]*(?=\s*==)' | uniq )
+    [ "$variable" ] || return 1
+    echo "${INFO}Found variable \"$variable\" for defining multiple outputs." 1>&2
+}
+
+process() {
+    local file=$1
+    local output=$2
+    echo "$output"
+    echo "${INFO}Starting $output...$NORMAL" 1>&2
+    image="${output%.*}.png"
+    echo "$image"
+    render "$file" "$output" &
+    render "$file" "$image" &
+}
+
+list_colors() {
+    local file=$1
+    grep -Po '(?<=color\().*(?=\))' "$file" | sort -u  | grep -v _color
+}
+
+process_all_comments() {
+    local file=$1
+
+    local module=""
+    local no_hits=1
+    while read -r line; do
+        maybe=$( echo "$line" | grep -E '^\s*module ' | sed 's/\s*module\s*//' | grep -E -o '^[^(]*' ) || true
+        [ -z "$maybe" ] || module="$maybe"
+        echo "$line" | grep -q 'RENDER' || continue
+        render=${line#*RENDER }   # delete everything leading up to RENDER
+        filetype=${render/ *}     # keep first word
+        args=""
+        echo "$render" | grep -q " " && args=${render#* }
+        if echo "$filetype" | grep -q '\.'; then
+            output=$filetype
+            filetype=${output#*.}
+        else
+            output="${file%.*}_$module.$filetype"
+        fi
+        if echo "$filetype" | grep -q "scad"; then
+            echo "${RED}scad is invalid output.  Skipping for safety reasons.$NORMAL"
+            continue
+        fi
+
+        if [ "$filetype" == "obj" ]; then
+            build_color "$file" "$module" "$output" "$args" &
+            continue
+        fi
+        
+        echo "building $output with from $file module $module ${args:+with optional args: }$args"
+        build "$file" "$module" "$output" "$args" &
+        no_hits=0
+    done < <( tac "$file" )
+    return $no_hits
+}
+
+build_color() {
+    file=$1
+    shift
+    module=$1
+    shift
+    output=$1
+    shift
+    blender="blender --background --python colorize_stl.py -- --outfile $output"
+    while read -r color; do
+        color_name=$( echo "$color" | grep -oi '[a-z]*' )
+        color_file="${file%.*}_${module}_${color_name}.stl"
+        
+        build "$file" "$module" "$color_file" "$args -D COLOR=$color" || continue 
+
+        blender="$blender --file $color_file --color $( eval echo "$color" )"
+    done < <( list_colors "$file" )
+    wait
+    $blender
+}
+
+build() {
+    file=$1
+    shift
+    module=$1
+    shift
+    output=$1
+    shift
+    # shellcheck disable=SC2068
+    if ! time $openscad --viewall --colorscheme=Tomorrow\ Night -o "$output" <( use_module_fifo "$file" "$module" ) ${@:-}; then
+        echo "$output ${RED}failed$NORMAL"
+        return 1
+    fi
+    echo "$output ${GREEN}OK$NORMAL"
+    # git add $output
+}
+
+process_all() {
+   local file=$1 
+   while read -r output; do
+       process "$file" "$output" &
+    done < <( grep -E '( |^)if' "$file" | grep -E -o '[^"^ ^'\'']*(.stl|.dxf)' )
+}
+
+render() {
+    file=$1
+    shift
+    output=$1
+    shift
+    echo "$openscad" -o "$output" "$file" "${@:-}"
+    if ! time $openscad --viewall --colorscheme=Tomorrow\ Night -o "$output" "$file" ; then
+        echo "$output ${RED}failed$NORMAL"
+        return 1
+    fi
+    echo "$output ${GREEN}OK$NORMAL"
+    # git add $output
+}
+
+process_one() {
+    output=${file//.scad/.stl}
+    echo "${INFO}Starting $output...$NORMAL " 1>&2
+    image="${output%.*}.png"
+    echo "${INFO}Starting $image...$NORMAL " 1>&2
+    render "$file" "$out/$output"
+    render "$file" "$out/$image"
+}
+
+use_module_fifo() {
+    local file=$1
+    local module=$2
+    use_module "$( readlink -f "$file" )" "$module"
+}
+use_module() {
+    local file=$1
+    local module=$2
+
+    echo "use <$file>; $module();"
+}
+
+execute() {
+    file=$1
+    [ "$file" ] || fail "File not specified"
+    [ "${2:-}" ] && fail "Too many options"
+    [ -f "$file" ] || fail "File does not exist"
+    echo "$file" | grep -q '\.scad$' || fail "Not an scad file"
+    dir=$( dirname "$file" )
+    out=$dir/output
+    mkdir -p "$out"
+
+    if ! process_all_comments "$file"; then
+        if get_variable; then
+           process_all "$file" 1>&2 
+        else
+           process_one "$file" 1>&2
+        fi
+    fi
+    wait
+    # git commit -m "autogen outout"
+    echo ""
+}
+
+main() {
+    openscad="openscad"
+    command -v $openscad &> /dev/null || openscad="openscad-nightly"
+    command -v $openscad &> /dev/null || fail "Cound not find openscad"
+
+    if [ "$1" ]; then
+        execute "$1"
+        return 
+    fi
+    #previous_commit
+}
+
+previous_commit() {
+    for file in $( git diff-tree -r --name-only --no-commit-id HEAD HEAD~1 | grep 'scad$' ); do
+        execute "$file"
+    done
+}
+
+main "${@:-}"
