@@ -1,20 +1,15 @@
 # OpenSCAD Post Processor
 
-This repo includes some scripts for automaically generating output from OpenSCAD.
+This repo includes some scripts for automaically generating and previewing output from OpenSCAD.
 
-There are several actions:
-* Preview: Open views of the scad file. 
-* Render: Generate output files.  This can be done automatically by using hooks.
-* Final: Manually generate output files.  This is for rendering output that takes too long to do automatically.
-* Build README: Automatically build a README.md that includes images
+Features:
+* All definitions are done by adding comments within the openscad script.
+* Can be run automically with vim and git hooks.
+* Only the specific module will be rendered, objects left in global space will be ignored.
+* Added the ability to create obj files that preserve colors defined in openscad.
 
-Hooks:
-* git commit: automatically add output to an asset branch of your repo
-* maslow community garden: automatically build output for a Maslow community garden compatible repository
-* README builder: Builds a README.md from scad source that includes comments and any generated pictures.
-* vim preview: Automatically open and close the previews of a file.
+# openscad-render
 
-## Render
 Declare output by adding comments above modules:
 
 ```
@@ -36,7 +31,7 @@ Usage: `// RENDER` followed by the filetype. A list of available options can be 
 
 Rendering is done through an automatically built temporary file which will `use` the .scad file and then call only the required module.  This will allow scratch work to be done outside the modules without affecting the output.
 
-### Naming
+## Naming
 
 Only passing the filetype (no dots) will result in an automatically generated name based on the script name, module name, and filetype.  For example: rendering a png of the assembled module in bankers_shelves.scad will create the file bankers_shelves_assembled.png 
 
@@ -54,13 +49,56 @@ Custom names will be evaluated so variables may be used.  The following variable
 * module: name of the module
 * reporoot: relative path to git repository root from openscad file
 
-### Render SCAD
+## Filetypes
 
-A custom filetype "scad" can be used with a RENDER statement.  This will create an scad file that uses the source script and calls the specific module.  This is handy for opening mutliple instances of OpenSCAD at one time to see multiple views of the same project.
+Unless calling a custom filetype (listed below) the filetype will be passed directly to openscad.  Anything it supports will be rendered.  The only exceptions are:
+* scad
+* obj
 
-Unlike the other filetypes an scad render will never overwrite existing files.  This is to protect your source code from accidental deletion.
+## scad 
 
-### Render obj
+"scad" can be used with a RENDER statement to create an scad file that will display only a specific function.  This is handy for opening mutliple instances of OpenSCAD at one time to see multiple views of the same project.
+
+Given the example source:
+
+_bankers_shelf.scad_
+```
+// RENDER scad
+module assembled() {
+    shelves();
+    boxes();
+}
+```
+
+The following would be generated:
+
+_bankers_shelf_assembled.scad_
+```
+use <bankers_shelf.scad>; assembled();
+```
+
+Unlike the other filetypes an scad render will never overwrite existing files.  This is to protect your source code from accidental deletion. (It also doesn't really have to change.)
+
+Extra args on this render line will be passed into the module.  For example:
+
+_bankers_shelf.scad_
+```
+// RENDER scad show_boxes=1
+module assembled(show_boxes="") {
+    shelves();
+    if(show_boxes)
+    boxes();
+}
+```
+
+Would render:
+
+_bankers_shelf_assembled.scad_
+```
+use <bankers_shelf.scad>; assembled(show_boxes=1);
+```
+
+### obj
 
 A custom filetype has also been added for exporting obj files.  This will create a 3D model of the module in a format that preserves colors.  This is accomplished by rendering an stl file per color, then combining them in blender with the colors applied.  For this to work there are several requirements:
 
@@ -86,17 +124,17 @@ Known working software for using the colorized output:
 * Sketchfab
 * VR Model Viewer
 
-## Preview
+# openscad-preview
 
-Render builds files for use at a later time.  Preview will build files to a temporary location and then open them immdediately.  It can be used to easily open up several instances of openscad at once.
+This will open rendered output.  Place a comment `\\ PREVIEW` above a `\\ RENDER` statement to have it opened by the openscad-preview command.  This can be called several times in a row and it should only open one window.
 
-Supported filetypes are:
+Current supported filetypes are:
 * scad
 * png
 
-## Final
+Unsupported files will be silently ignored.
 
-Final is the same as render, but it will not be included in any git or vim hooks.  This is where the really heavy work should be done.
+To close all windows add --kill as the first command line argument. 
 
 # Hooks
 
