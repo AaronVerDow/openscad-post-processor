@@ -10,6 +10,10 @@ Features:
 
 # openscad-render
 
+```
+openscad-render <openscad file> [output filetype|output filename] [module] [extra args]
+```
+
 Declare output by adding comments above modules:
 
 ```
@@ -156,3 +160,19 @@ au BufWritePost *.scad silent exec "!openscad-render <afile> > /dev/null 2>&1 &"
 ## git
 
 todo
+
+# Goals
+
+Goals:
+* Reduce the amount of work that must be done outside of a text editor
+* Reduce the amount of manual actions that must be taken
+* Get pretty output that I might not otherwise bother to create
+* Make it easier to document and show off projects
+
+Design tenants:
+* Name things once.  Automatically generate new names if not defined.
+  * Still allow custom names to be defined to handle edge cases.
+* Accept simple, standlone scad scripts with no requirements met.
+* All scripts should be callable from anywhere.
+  * All automatically generated paths should be relative to the script location.
+
