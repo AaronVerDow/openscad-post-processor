@@ -13,6 +13,8 @@ WHITE="$(echo -e '\033[1;37m')"
 NORMAL="$(echo -e '\033[0;39m')"
 export CRE RED GREEN YELLOW BLUE MAGENTA CYAN WHITE NORMAL
 
+colorscheme="Tomorrow"
+
 
 current_branch() {
     git rev-parse --abbrev-ref HEAD
@@ -47,19 +49,29 @@ process_all_comments() {
         args=""
         echo "$render" | grep -q " " && args=${render#* }
         if echo "$filetype" | grep -q '\.'; then
+            # a dot in the name means a manual name was specified
             output=$filetype
             filetype=${output#*.}
         else
-            output="${file%.*}_$module.$filetype"
+            # if only the filetype was passed autoatically generate a new name
+            output="output/${file%.*}_$module.$filetype"
+        fi
+
+        if echo "$filetype" | grep -q "gif"; then
+            build_gif "$file" "$module" "$output" "$args" &
+            no_hits=0
+            continue
         fi
 
         if echo "$filetype" | grep -q "scad"; then
             build_scad "$file" "$module" "$output" "$args" &
+            no_hits=0
             continue
         fi
 
         if [ "$filetype" == "obj" ]; then
             build_color "$file" "$module" "$output" "$args" &
+            no_hits=0
             continue
         fi
         
@@ -90,6 +102,44 @@ build_color() {
     $blender
 }
 
+build_gif() {
+    file=$1
+    shift
+    module=$1
+    shift
+    output=$1
+    shift
+
+    # disabled args for gif
+
+    fps=$( echo "$args" | grep -o 'FPS [^ ]*' | grep -o '[0-9]*' || true )
+    [ -z "$fps" ] && fps=15
+
+    steps=$( echo "$@" | grep -o 'STEPS [^ ]*' | grep -o '[0-9]*' || true )
+    [ -z "$steps" ] && steps=90
+
+    delay=$( echo "100 / $fps" | bc -l )
+
+    frames=$( mktemp -d )
+    echo "Writing frames to $frames"
+
+    # shellcheck disable=SC2068
+    for step in $( seq 0 $steps ); do
+        t=$( echo "1 / $steps * $step" | bc -l )
+        if ! time $openscad --viewall --colorscheme="$colorscheme" -o "$frames/frame_$step.png" -D"\$t=$t" <( use_module_fifo "$file" "$module" ); then
+            echo "$output $step/$steps ${RED}failed$NORMAL"
+            return 1
+        fi
+        echo "${GREEN}$output $step/$steps$NORMAL"
+    done
+    if ! convert $( /bin/find "$frames" -name '*.png' | sort --version-sort ) -set delay "$delay" "$output"; then
+            echo "$output ${RED}failed$NORMAL"
+            return 1
+    fi
+    echo "$output ${GREEN}OK$NORMAL"
+}
+
+
 build_scad() {
     file=$1
     shift
@@ -116,7 +166,7 @@ build() {
     output=$1
     shift
     # shellcheck disable=SC2068
-    if ! time $openscad --viewall --colorscheme=Tomorrow\ Night -o "$output" <( use_module_fifo "$file" "$module" ) ${@:-}; then
+    if ! time $openscad --viewall --colorscheme="$colorscheme" -o "$output" <( use_module_fifo "$file" "$module" ) ${@:-}; then
         echo "$output ${RED}failed$NORMAL"
         return 1
     fi
@@ -130,7 +180,7 @@ build_global() {
     output=$1
     shift
     # shellcheck disable=SC2068
-    if ! time $openscad --viewall --colorscheme=Tomorrow\ Night -o "$output" "$file"  ${@:-}; then
+    if ! time $openscad --viewall --colorscheme="$colorscheme" -o "$output" "$file"  ${@:-}; then
         echo "$output ${RED}failed$NORMAL"
         return 1
     fi
@@ -170,7 +220,7 @@ execute() {
     dir=$( dirname "$file" )
     out=$dir/output
     mkdir -p "$out"
-    process_all_comments "$file" || process_one "$file" 
+    process_all_comments "$file" || true # process_one "$file" 
     wait
     # git commit -m "autogen outout"
     echo ""
