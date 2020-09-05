@@ -37,7 +37,7 @@ process_all_comments() {
             output=$filetype
             filetype=${output#*.}
         else
-            output="${file%.*}_$module.$filetype"
+            output="output/${file%.*}_$module.$filetype"
         fi
 
         if [ "$filetype" == "scad" ]; then
@@ -85,7 +85,7 @@ main() {
     [ -f "$file" ] || fail "File does not exist"
     echo "$file" | grep -q '\.scad$' || fail "Not an scad file"
     process_all_comments "$file" "$cmd" || true
-    process_one "$file" "$cmd"
+    # process_one "$file" "$cmd"
 }
 
 main "${@:-}"
