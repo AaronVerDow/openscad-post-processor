@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-
 CRE="$(echo -e '\r\033[K')"
 RED="$(echo -e '\033[1;31m')"
 GREEN="$(echo -e '\033[1;32m')"
@@ -14,7 +13,6 @@ NORMAL="$(echo -e '\033[0;39m')"
 export CRE RED GREEN YELLOW BLUE MAGENTA CYAN WHITE NORMAL
 
 colorscheme="Tomorrow"
-
 
 current_branch() {
     git rev-parse --abbrev-ref HEAD
@@ -44,6 +42,7 @@ process_all_comments() {
         maybe=$( echo "$line" | grep -E '^\s*module ' | sed 's/\s*module\s*//' | grep -E -o '^[^(]*' ) || true
         [ -z "$maybe" ] || module="$maybe"
         echo "$line" | grep -q 'RENDER' || continue
+        set -x
         render=${line#*RENDER }   # delete everything leading up to RENDER
         filetype=${render/ *}     # keep first word
         args=""
@@ -54,7 +53,8 @@ process_all_comments() {
             filetype=${output#*.}
         else
             # if only the filetype was passed autoatically generate a new name
-            output="output/${file%.*}_$module.$filetype"
+            # output="output/${file%.*}_$module.$filetype" # adds extra space on MacOS for some reason
+            output=$( echo "output/${file%.*}_$module.$filetype" | sed 's/ //g' )
         fi
 
         if echo "$filetype" | grep -q "flatgif"; then
@@ -77,6 +77,12 @@ process_all_comments() {
 
         if [ "$filetype" == "obj" ]; then
             build_color "$file" "$module" "$output" "$args" &
+            no_hits=0
+            continue
+        fi
+
+        if [ "$filetype" == "svg2png" ]; then
+            build_svg2png "$file" "$module" "${output//svg2png/svg}" "$args" &
             no_hits=0
             continue
         fi
@@ -199,6 +205,33 @@ build_scad() {
     [ -f "$output" ] && return 0
     use_module "$relative_file" "$module" "$*" >> "$output"
     echo "$output ${GREEN}OK$NORMAL"
+    # git add $output
+}
+
+build_svg2png() {
+    file=$1
+    shift
+    module=$1
+    shift
+    output=$1
+    shift
+    # shellcheck disable=SC2068
+    if ! time $openscad --viewall --colorscheme="$colorscheme" -o "$output" <( use_module_fifo "$file" "$module" ) ${@:-}; then
+        echo "$output ${RED}failed$NORMAL"
+        return 1
+    fi
+
+    # sed on MacOS doesn't like in place flag
+    _sed=sed
+    which gsed &> /dev/null && _sed=gsed
+
+    $_sed 's/ fill="[^"]*"/ fill="black"/' -i $output
+    $_sed 's/ stroke="[^"]*"/ stroke="none"/' -i $output
+
+    output2=$( echo $output | sed 's/svg$/png/' )
+    inkscape $output -o $output2
+    rm $output
+    echo "$output2 ${GREEN}OK$NORMAL"
     # git add $output
 }
 
