@@ -66,7 +66,7 @@ _kill() {
 process_one() {
     local file=$1
     local cmd=$2
-    $cmd openscad "$file"
+    $cmd openscad --viewall "$file"
 }
 
 main() {
