@@ -42,7 +42,6 @@ process_all_comments() {
         maybe=$( echo "$line" | grep -E '^\s*module ' | sed 's/\s*module\s*//' | grep -E -o '^[^(]*' ) || true
         [ -z "$maybe" ] || module="$maybe"
         echo "$line" | grep -q 'RENDER' || continue
-        set -x
         render=${line#*RENDER }   # delete everything leading up to RENDER
         filetype=${render/ *}     # keep first word
         args=""
