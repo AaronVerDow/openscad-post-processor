@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 
@@ -13,6 +13,7 @@ WHITE="$(echo -e '\033[1;37m')"
 NORMAL="$(echo -e '\033[0;39m')"
 export CRE RED GREEN YELLOW BLUE MAGENTA CYAN WHITE NORMAL
 
+executable="openscad"
 
 process_all_comments() {
     local file=$1
@@ -41,7 +42,7 @@ process_all_comments() {
         fi
 
         if [ "$filetype" == "scad" ]; then
-            $cmd openscad "$output" &
+            $cmd $executable "$output" &
             no_hits=0
             continue
         fi
@@ -63,10 +64,15 @@ _kill() {
     pgrep -f "$*" | xargs kill
 }
 
+fail() {
+    echo "$RED$*$NORMAL" 1>&2
+    exit 1
+}
+
 process_one() {
     local file=$1
     local cmd=$2
-    $cmd openscad "$file"
+    $cmd $executable "$file"
 }
 
 main() {
