@@ -55,9 +55,13 @@ Custom names will be evaluated so variables may be used.  The following variable
 
 ## Filetypes
 
-Unless calling a custom filetype (listed below) the filetype will be passed directly to openscad.  Anything it supports will be rendered.  The only exceptions are:
-* scad
-* obj
+All OpenSCAD filetypes are supported, as well as the custom types below:
+
+* `scad`: outputs a file that calls the specific module
+* `obj`: creates Blender obj, with colors applied
+* `gif`: builds an animated gif with $t oscilating between 0 and 1
+* `flatgif`: same as `gif`, but with camera set for 2D models  
+* `svg2png`: exports as svg, removes border line, sets fill to black, and converts to png. Useful for printing 2D designs.
 
 ## scad 
 
