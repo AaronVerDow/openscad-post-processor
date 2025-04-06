@@ -86,6 +86,12 @@ process_all_comments() {
             continue
         fi
         
+        if [ "$filetype" == "fillsvg" ]; then
+            build_fillsvg "$file" "$module" "${output//fillsvg/svg}" "$args" &
+            no_hits=0
+            continue
+        fi
+        
         echo "building $output with from $file module $module ${args:+with optional args: }$args"
         build "$file" "$module" "$output" "$args" &
         no_hits=0
@@ -102,7 +108,7 @@ build_color() {
     shift
     blender="blender --background --python colorize_stl.py -- --outfile $output"
     while read -r color; do
-        color_name=$( echo "$color" | grep -oi '[a-z]*' )
+        color_name=$( echo "$color" | grep -oi '[a-z0-9]*' )
         color_file="${file%.*}_${module}_${color_name}.stl"
         
         build "$file" "$module" "$color_file" "$args -D COLOR=$color" || continue 
@@ -110,7 +116,7 @@ build_color() {
         blender="$blender --file $color_file --color $( eval echo "$color" )"
     done < <( list_colors "$file" )
     wait
-    $blender
+    $blender || true
 }
 
 build_flat_gif() {
@@ -233,6 +239,28 @@ build_svg2png() {
     echo "$output2 ${GREEN}OK$NORMAL"
     # git add $output
 }
+
+build_fillsvg() {
+    file=$1
+    shift
+    module=$1
+    shift
+    output=$1
+    shift
+    # shellcheck disable=SC2068
+    if ! time $openscad --viewall --colorscheme="$colorscheme" -o "$output" <( use_module_fifo "$file" "$module" ) ${@:-}; then
+        echo "$output ${RED}failed$NORMAL"
+        return 1
+    fi
+
+    # sed on MacOS doesn't like in place flag
+    _sed=sed
+    which gsed &> /dev/null && _sed=gsed
+
+    $_sed 's/ fill="[^"]*"/ fill="black"/' -i $output
+    $_sed 's/ stroke="[^"]*"/ stroke="none"/' -i $output
+}
+
 
 build() {
     file=$1

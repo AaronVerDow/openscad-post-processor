@@ -72,7 +72,7 @@ fail() {
 process_one() {
     local file=$1
     local cmd=$2
-    $cmd $executable "$file"
+    $cmd $executable --viewall "$file"
 }
 
 main() {
