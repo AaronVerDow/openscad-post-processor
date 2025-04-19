@@ -1,12 +1,11 @@
-# OpenSCAD Post Processor
+# OpenSCAD Render
 
-This repo includes some scripts for automaically generating and previewing output from OpenSCAD.
+This repo includes some scripts for generating output from OpenSCAD.
 
 Features:
 * All definitions are done by adding comments within the openscad script.
-* Can be run automically with vim and git hooks.
 * Only the specific module will be rendered, objects left in global space will be ignored.
-* Added the ability to create obj files that preserve colors defined in openscad.
+* Create obj files that preserve colors defined in openscad.
 
 # openscad-render
 
@@ -131,52 +130,3 @@ Known working software for using the colorized output:
 * Blender
 * Sketchfab
 * VR Model Viewer
-
-# openscad-preview
-
-This will open rendered output.  Place a comment `\\ PREVIEW` above a `\\ RENDER` statement to have it opened by the openscad-preview command.  This can be called several times in a row and it should only open one window.
-
-Current supported filetypes are:
-* scad
-* png
-
-Unsupported files will be silently ignored.
-
-To close all windows add --kill as the first command line argument. 
-
-# Hooks
-
-## vimrc
-
-Add this to ~/.vimrc for automatic renders and previews:
-
-```
-" Open preview windows on open
-au BufRead *.scad silent exec "!openscad-preview <afile> > /dev/null 2>&1 &"
-
-" Close preview windows when quitting
-au VimLeave *.scad silent exec "!openscad-preview --kill <afile> > /dev/null 2>&1 &"
-
-" Render output on write
-au BufWritePost *.scad silent exec "!openscad-render <afile> > /dev/null 2>&1 &"
-```
-
-## git
-
-todo
-
-# Goals
-
-Goals:
-* Reduce the amount of work that must be done outside of a text editor
-* Reduce the amount of manual actions that must be taken
-* Get pretty output that I might not otherwise bother to create
-* Make it easier to document and show off projects
-
-Design tenants:
-* Name things once.  Automatically generate new names if not defined.
-  * Still allow custom names to be defined to handle edge cases.
-* Accept simple, standlone scad scripts with no requirements met.
-* All scripts should be callable from anywhere.
-  * All automatically generated paths should be relative to the script location.
-
